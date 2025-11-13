@@ -4,7 +4,7 @@ package debian
 import (
 	"fmt"
 
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/quark/ssh"
 )
 
 // customInstaller is a function that performs custom package installation.

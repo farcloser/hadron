@@ -5,7 +5,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/the-agent-c-ai/hadron/sdk"
+	"github.com/farcloser/hadron/sdk"
 )
 
 func TestNewPlan(t *testing.T) {

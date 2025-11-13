@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/quark/ssh"
 )
 
 const (

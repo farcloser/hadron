@@ -15,7 +15,7 @@
 set -euo pipefail
 
 # Configuration - defaults to GHCR image with digest
-CADDY_IMAGE="${CADDY_IMAGE:-ghcr.io/the-agent-c-ai/caddy}"
+CADDY_IMAGE="${CADDY_IMAGE:-ghcr.io/farcloser/caddy}"
 CADDY_DIGEST="${CADDY_DIGEST:-sha256:47ff1754ab3210cefbb4287d840bd091e8eac9981dbe2a92b0ab2a3222721d22}"
 
 # Colors for output
@@ -32,7 +32,7 @@ usage() {
     echo "The formatted file will overwrite the original."
     echo ""
     echo "Environment variables:"
-    echo "  CADDY_IMAGE   - Caddy Docker image (default: ghcr.io/the-agent-c-ai/caddy)"
+    echo "  CADDY_IMAGE   - Caddy Docker image (default: ghcr.io/farcloser/caddy)"
     echo "  CADDY_DIGEST  - Caddy image digest (default: sha256:47ff1754ab3210cefbb4287d840bd091e8eac9981dbe2a92b0ab2a3222721d22)"
     exit 1
 }

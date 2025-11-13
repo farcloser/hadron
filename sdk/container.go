@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/the-agent-c-ai/hadron/sdk/hash"
+	"github.com/farcloser/hadron/sdk/hash"
 )
 
 const (

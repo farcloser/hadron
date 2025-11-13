@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # Configuration - defaults to GHCR image with digest
-VECTOR_IMAGE="${VECTOR_IMAGE:-ghcr.io/the-agent-c-ai/vector}"
+VECTOR_IMAGE="${VECTOR_IMAGE:-ghcr.io/farcloser/vector}"
 VECTOR_DIGEST="${VECTOR_DIGEST:-sha256:fa91645f7ca1fbb3e10a103acfcb6832228578d2d3746b79de9582a1a95335e9}"
 
 # Colors for output
@@ -32,7 +32,7 @@ usage() {
     echo "Validates Vector configuration using Docker container."
     echo ""
     echo "Environment variables:"
-    echo "  VECTOR_IMAGE   - Vector Docker image (default: ghcr.io/the-agent-c-ai/vector)"
+    echo "  VECTOR_IMAGE   - Vector Docker image (default: ghcr.io/farcloser/vector)"
     echo "  VECTOR_DIGEST  - Vector image digest (default: sha256:fa91645f7ca1fbb3e10a103acfcb6832228578d2d3746b79de9582a1a95335e9)"
     exit 1
 }

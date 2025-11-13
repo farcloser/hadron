@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/the-agent-c-ai/hadron/internal/debian"
-	"github.com/the-agent-c-ai/hadron/internal/testutil"
+	"github.com/farcloser/hadron/internal/debian"
+	"github.com/farcloser/quark/testutil"
 )
 
 func TestEnsureAutoUpdatesEnabled(t *testing.T) { //nolint:paralleltest // Integration tests use shared container

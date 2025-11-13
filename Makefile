@@ -1,4 +1,4 @@
-ORG_PREFIXES := "github.com/the-agent-c-ai"
+ORG_PREFIXES := "github.com/farcloser"
 ICON := "🧿"
 
 MAKEFILE_DIR := $(patsubst %/,%,$(dir $(abspath $(lastword $(MAKEFILE_LIST)))))
@@ -83,6 +83,7 @@ lint-shell: $(call recursive_wildcard,$(MAKEFILE_DIR)/,*.sh)
 lint-commits:
 	$(call title, $@)
 	@cd $(MAKEFILE_DIR) \
+		&& { git config --unset-all gpg.ssh.allowedSignersFile hack/allowed_signers || true; } \
 		&& git config --add gpg.ssh.allowedSignersFile hack/allowed_signers \
 		&& git-validation $(VERBOSE_FLAG) -run DCO,short-subject,dangling-whitespace -range "$(LINT_COMMIT_RANGE)"
 	$(call footer, $@)
@@ -106,7 +107,6 @@ lint-licenses:
 	$(call title, $@: $(GOOS))
 	@cd $(MAKEFILE_DIR) \
 		&& go-licenses check --include_tests --allowed_licenses=Apache-2.0,BSD-2-Clause,BSD-3-Clause,MIT,MPL-2.0 \
-		  --ignore gotest.tools \
 		  ./...
 	$(call footer, $@)
 
@@ -218,7 +218,7 @@ build: ## Build the binary
 	$(GOBUILD) -o $(BINARY_PATH) ./cmd/$(BINARY_NAME)
 	@echo "Binary built: $(BINARY_PATH)"
 
-install: ## Install cranberry to GOPATH/bin
+install: ## Install to GOPATH/bin
 	@echo "Installing $(BINARY_NAME)..."
 	$(GOINSTALL) ./cmd/$(BINARY_NAME)
 	@echo "Installed to $$(go env GOPATH)/bin/$(BINARY_NAME)"

@@ -30,6 +30,8 @@ const (
 	HealthCheckHTTP HealthCheckType = "http"
 	// HealthCheckTCP performs a TCP connection check.
 	HealthCheckTCP HealthCheckType = "tcp"
+	// HealthCheckUDP performs a UDP connection check.
+	HealthCheckUDP HealthCheckType = "udp"
 	// HealthCheckCommand executes a command inside the container.
 	HealthCheckCommand HealthCheckType = "command"
 )
@@ -50,6 +52,17 @@ func HTTPCheck(path string, port int) *HealthCheck {
 func TCPCheck(port int) *HealthCheck {
 	return &HealthCheck{
 		checkType: HealthCheckTCP,
+		port:      port,
+		timeout:   defaultHealthCheckTimeout,
+		interval:  defaultHealthCheckInterval,
+		retries:   defaultHealthCheckRetries,
+	}
+}
+
+// UDPCheck creates a UDP health check.
+func UDPCheck(port int) *HealthCheck {
+	return &HealthCheck{
+		checkType: HealthCheckUDP,
 		port:      port,
 		timeout:   defaultHealthCheckTimeout,
 		interval:  defaultHealthCheckInterval,
@@ -99,6 +112,8 @@ func (hc *HealthCheck) String() string {
 		return fmt.Sprintf("HTTP %s:%d%s", "localhost", hc.port, hc.path)
 	case HealthCheckTCP:
 		return fmt.Sprintf("TCP %s:%d", "localhost", hc.port)
+	case HealthCheckUDP:
+		return fmt.Sprintf("UDP %s:%d", "localhost", hc.port)
 	case HealthCheckCommand:
 		return fmt.Sprintf("Command: %v", hc.command)
 	default:

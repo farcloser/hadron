@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/the-agent-c-ai/hadron/sdk"
+	"github.com/farcloser/hadron/sdk"
 )
 
 const (

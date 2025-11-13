@@ -12,8 +12,8 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/the-agent-c-ai/hadron/sdk/hash"
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/hadron/sdk/hash"
+	"github.com/farcloser/quark/ssh"
 )
 
 const (
@@ -454,7 +454,6 @@ func (e *Executor) RegistryLogin(client ssh.Connection, registry, username, pass
 
 	e.logger.Debug().
 		Str("registry", registry).
-		Str("username", username).
 		Msg("Logging into registry")
 
 	_, stderr, err := client.Execute(cmd)
@@ -462,7 +461,7 @@ func (e *Executor) RegistryLogin(client ssh.Connection, registry, username, pass
 		return fmt.Errorf("failed to login to registry %s: %w (stderr: %s)", registry, err, stderr)
 	}
 
-	e.logger.Info().Str("registry", registry).Str("username", username).Msg("Registry login successful")
+	e.logger.Info().Str("registry", registry).Msg("Registry login successful")
 
 	return nil
 }

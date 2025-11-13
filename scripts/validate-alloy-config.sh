@@ -16,7 +16,7 @@
 set -euo pipefail
 
 # Configuration - defaults to GHCR image with digest
-ALLOY_IMAGE="${ALLOY_IMAGE:-ghcr.io/the-agent-c-ai/alloy}"
+ALLOY_IMAGE="${ALLOY_IMAGE:-ghcr.io/farcloser/alloy}"
 ALLOY_DIGEST="${ALLOY_DIGEST:-sha256:b21dce08f83209909b975aa99de5434733f0d89dcaf257d540d2bcc85431470a}"
 
 # Colors for output
@@ -32,7 +32,7 @@ usage() {
     echo "Validates Grafana Alloy configuration using Docker container."
     echo ""
     echo "Environment variables:"
-    echo "  ALLOY_IMAGE   - Alloy Docker image (default: ghcr.io/the-agent-c-ai/alloy)"
+    echo "  ALLOY_IMAGE   - Alloy Docker image (default: ghcr.io/farcloser/alloy)"
     echo "  ALLOY_DIGEST  - Alloy image digest (default: sha256:b21dce08f83209909b975aa99de5434733f0d89dcaf257d540d2bcc85431470a)"
     exit 1
 }

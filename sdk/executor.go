@@ -6,12 +6,12 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/the-agent-c-ai/hadron/internal/debian"
-	"github.com/the-agent-c-ai/hadron/internal/docker"
-	"github.com/the-agent-c-ai/hadron/internal/firewall"
-	"github.com/the-agent-c-ai/hadron/internal/sshd"
-	"github.com/the-agent-c-ai/hadron/internal/sysctl"
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/hadron/internal/debian"
+	"github.com/farcloser/hadron/internal/docker"
+	"github.com/farcloser/hadron/internal/firewall"
+	"github.com/farcloser/hadron/internal/sshd"
+	"github.com/farcloser/hadron/internal/sysctl"
+	"github.com/farcloser/quark/ssh"
 )
 
 const (

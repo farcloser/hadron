@@ -2,6 +2,7 @@
 package main
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -11,7 +12,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/urfave/cli/v2"
+	"github.com/urfave/cli/v3"
 )
 
 const (
@@ -26,7 +27,7 @@ func main() {
 	zerolog.TimeFieldFormat = time.RFC3339
 	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 
-	app := &cli.App{
+	cmd := &cli.Command{
 		Name:  "hadron",
 		Usage: "Declarative Docker deployment tool",
 		Flags: []cli.Flag{
@@ -37,15 +38,15 @@ func main() {
 				Usage:   "Log level (debug, info, warn, error)",
 			},
 		},
-		Before: func(c *cli.Context) error {
+		Before: func(ctx context.Context, cmd *cli.Command) (context.Context, error) {
 			// Set log level
-			level, err := zerolog.ParseLevel(c.String("log-level"))
+			level, err := zerolog.ParseLevel(cmd.String("log-level"))
 			if err != nil {
-				return fmt.Errorf("invalid log level: %w", err)
+				return ctx, fmt.Errorf("invalid log level: %w", err)
 			}
 			zerolog.SetGlobalLevel(level)
 
-			return nil
+			return ctx, nil
 		},
 		Commands: []*cli.Command{
 			{
@@ -81,14 +82,14 @@ func main() {
 		},
 	}
 
-	if err := app.Run(os.Args); err != nil {
+	if err := cmd.Run(context.Background(), os.Args); err != nil {
 		log.Fatal().Err(err).Msg("Command failed")
 	}
 }
 
-func deploy(c *cli.Context) error {
-	planPath := c.String(flagNamePlan)
-	dryRun := c.Bool("dry-run")
+func deploy(_ context.Context, cmd *cli.Command) error {
+	planPath := cmd.String(flagNamePlan)
+	dryRun := cmd.Bool("dry-run")
 
 	// Determine if planPath is a directory or file
 	stat, err := os.Stat(planPath)
@@ -114,21 +115,21 @@ func deploy(c *cli.Context) error {
 
 	// Execute go run on the plan
 	//nolint:gosec
-	cmd := exec.Command("go", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), fmt.Sprintf("HADRON_DRY_RUN=%t", dryRun))
-	cmd.Dir = planDir
+	execCmd := exec.Command("go", args...)
+	execCmd.Stdout = os.Stdout
+	execCmd.Stderr = os.Stderr
+	execCmd.Env = append(os.Environ(), fmt.Sprintf("HADRON_DRY_RUN=%t", dryRun))
+	execCmd.Dir = planDir
 
-	if err := cmd.Run(); err != nil {
+	if err := execCmd.Run(); err != nil {
 		return fmt.Errorf("failed to execute plan: %w", err)
 	}
 
 	return nil
 }
 
-func destroy(c *cli.Context) error {
-	planPath := c.String(flagNamePlan)
+func destroy(_ context.Context, cmd *cli.Command) error {
+	planPath := cmd.String(flagNamePlan)
 
 	// Determine if planPath is a directory or file
 	stat, err := os.Stat(planPath)
@@ -154,13 +155,13 @@ func destroy(c *cli.Context) error {
 
 	// Execute go run on the plan with destroy mode
 	//nolint:gosec
-	cmd := exec.Command("go", args...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	cmd.Env = append(os.Environ(), "HADRON_DESTROY=true")
-	cmd.Dir = planDir
+	execCmd := exec.Command("go", args...)
+	execCmd.Stdout = os.Stdout
+	execCmd.Stderr = os.Stderr
+	execCmd.Env = append(os.Environ(), "HADRON_DESTROY=true")
+	execCmd.Dir = planDir
 
-	if err := cmd.Run(); err != nil {
+	if err := execCmd.Run(); err != nil {
 		return fmt.Errorf("failed to execute plan: %w", err)
 	}
 
