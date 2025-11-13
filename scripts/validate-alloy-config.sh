@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 #
-# validate-vector-config.sh - Validate Vector configuration using Docker container
+# validate-alloy-config.sh - Validate Grafana Alloy configuration using Docker container
 #
-# Usage: ./validate-vector-config.sh <path-to-config.yaml>
+# Usage: ./validate-alloy-config.sh <path-to-config.alloy>
 #
-# Validates Vector YAML configuration by running it through the Vector validate command
-# in a Docker container. Uses the same Vector image version as production (from straw/plans/.env).
+# Validates Alloy configuration by running it through the Alloy fmt command
+# in a Docker container. Uses the same Alloy image version as production (from straw/plans/.env).
 #
 # Note: Dummy environment variables are provided for validation purposes only.
 #
@@ -16,8 +16,8 @@
 set -euo pipefail
 
 # Configuration - defaults to GHCR image with digest
-VECTOR_IMAGE="${VECTOR_IMAGE:-ghcr.io/farcloser/vector}"
-VECTOR_DIGEST="${VECTOR_DIGEST:-sha256:fa91645f7ca1fbb3e10a103acfcb6832228578d2d3746b79de9582a1a95335e9}"
+ALLOY_IMAGE="${ALLOY_IMAGE:-ghcr.io/farcloser/alloy}"
+ALLOY_DIGEST="${ALLOY_DIGEST:-sha256:b21dce08f83209909b975aa99de5434733f0d89dcaf257d540d2bcc85431470a}"
 
 # Colors for output
 RED='\033[0;31m'
@@ -27,13 +27,13 @@ NC='\033[0m' # No Color
 
 # Usage
 usage() {
-    echo "Usage: $0 <path-to-config.yaml>"
+    echo "Usage: $0 <path-to-config.alloy>"
     echo ""
-    echo "Validates Vector configuration using Docker container."
+    echo "Validates Grafana Alloy configuration using Docker container."
     echo ""
     echo "Environment variables:"
-    echo "  VECTOR_IMAGE   - Vector Docker image (default: ghcr.io/farcloser/vector)"
-    echo "  VECTOR_DIGEST  - Vector image digest (default: sha256:fa91645f7ca1fbb3e10a103acfcb6832228578d2d3746b79de9582a1a95335e9)"
+    echo "  ALLOY_IMAGE   - Alloy Docker image (default: ghcr.io/farcloser/alloy)"
+    echo "  ALLOY_DIGEST  - Alloy image digest (default: sha256:b21dce08f83209909b975aa99de5434733f0d89dcaf257d540d2bcc85431470a)"
     exit 1
 }
 
@@ -55,24 +55,22 @@ fi
 CONFIG_FILE_ABS="$(cd "$(dirname "$CONFIG_FILE")" && pwd)/$(basename "$CONFIG_FILE")"
 
 # Build full image name (using digest for production stability)
-FULL_IMAGE="${VECTOR_IMAGE}@${VECTOR_DIGEST}"
+FULL_IMAGE="${ALLOY_IMAGE}@${ALLOY_DIGEST}"
 
-echo -e "${YELLOW}Validating Vector config: $CONFIG_FILE${NC}"
+echo -e "${YELLOW}Validating Alloy config: $CONFIG_FILE${NC}"
 echo -e "${YELLOW}Using image: $FULL_IMAGE${NC}"
 echo ""
 
-# Run Vector validate in container
+# Run Alloy fmt in container
 # Provide common dummy environment variables for validation (syntax check only)
 if docker run --rm \
-    -v "$CONFIG_FILE_ABS:/etc/vector/vector.yaml:ro" \
-    -e "LOKI_ENDPOINT=https://validation.example.com" \
-    -e "LOKI_USERNAME=validation-user" \
-    -e "LOKI_PASSWORD=validation-password" \
+    -v "$CONFIG_FILE_ABS:/etc/alloy/config.alloy:ro" \
+    -e "PROMETHEUS_ENDPOINT=https://prometheus-validation.grafana.net/api/prom/push" \
+    -e "PROMETHEUS_USERNAME=validation-user" \
+    -e "PROMETHEUS_PASSWORD=validation-password" \
     -e "ENVIRONMENT=validation" \
-    -e "VECTOR_LOG=info" \
-    -e "VECTOR_VERSION=0.0.0" \
     "$FULL_IMAGE" \
-    validate /etc/vector/vector.yaml; then
+    fmt --write=false /etc/alloy/config.alloy; then
     echo ""
     echo -e "${GREEN}✓ Configuration is valid${NC}"
     exit 0

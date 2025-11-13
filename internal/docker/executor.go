@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	"github.com/rs/zerolog"
 
-	"github.com/the-agent-c-ai/hadron/sdk/hash"
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/hadron/sdk/hash"
+	"github.com/farcloser/quark/ssh"
 )
 
 const (
@@ -238,16 +239,15 @@ func (e *Executor) PullImage(client ssh.Connection, image string) (bool, error) 
 	return true, nil
 }
 
-// RunContainer runs a Docker container on the remote host.
-func (e *Executor) RunContainer(client ssh.Connection, opts ContainerRunOptions) error {
-	// Collect all env files to pass to docker run
+// prepareEnvFiles handles uploading env files and returns the list of remote paths.
+func (e *Executor) prepareEnvFiles(client ssh.Connection, opts ContainerRunOptions) ([]string, error) {
 	var envFiles []string
 
 	// Handle user-provided env file if specified
 	if opts.EnvFile != "" {
 		remotePath, err := e.uploadEnvFile(client, opts.EnvFile)
 		if err != nil {
-			return fmt.Errorf("failed to upload env file: %w", err)
+			return nil, fmt.Errorf("failed to upload env file: %w", err)
 		}
 
 		envFiles = append(envFiles, remotePath)
@@ -257,12 +257,23 @@ func (e *Executor) RunContainer(client ssh.Connection, opts ContainerRunOptions)
 	if len(opts.EnvVars) > 0 {
 		remotePath, err := e.uploadEnvVarsFile(client, opts.EnvVars)
 		if err != nil {
-			return fmt.Errorf("failed to upload env vars file: %w", err)
+			return nil, fmt.Errorf("failed to upload env vars file: %w", err)
 		}
 
 		if remotePath != "" {
 			envFiles = append(envFiles, remotePath)
 		}
+	}
+
+	return envFiles, nil
+}
+
+// RunContainer runs a Docker container on the remote host.
+func (e *Executor) RunContainer(client ssh.Connection, opts ContainerRunOptions) error {
+	// Collect all env files to pass to docker run
+	envFiles, err := e.prepareEnvFiles(client, opts)
+	if err != nil {
+		return err
 	}
 
 	cmd := "docker run -d"
@@ -288,6 +299,19 @@ func (e *Executor) RunContainer(client ssh.Connection, opts ContainerRunOptions)
 		cmd += fmt.Sprintf(" --cpu-shares %d", opts.CPUShares)
 	}
 
+	if opts.CPUs != "" {
+		cmd += " --cpus " + opts.CPUs
+	}
+
+	if opts.PIDsLimit > 0 {
+		cmd += fmt.Sprintf(" --pids-limit %d", opts.PIDsLimit)
+	}
+
+	// Hostname
+	if opts.Hostname != "" {
+		cmd += " --hostname " + opts.Hostname
+	}
+
 	// Network
 	if opts.Network != "" {
 		cmd += " --network " + opts.Network
@@ -301,6 +325,11 @@ func (e *Executor) RunContainer(client ssh.Connection, opts ContainerRunOptions)
 	// Ports
 	for _, port := range opts.Ports {
 		cmd += " -p " + port
+	}
+
+	// Extra hosts
+	for _, host := range opts.ExtraHosts {
+		cmd += " --add-host=" + host
 	}
 
 	// Volumes
@@ -350,6 +379,11 @@ func (e *Executor) RunContainer(client ssh.Connection, opts ContainerRunOptions)
 
 	for _, cap := range opts.CapAdd {
 		cmd += " --cap-add " + cap
+	}
+
+	// Groups
+	for _, group := range opts.GroupAdd {
+		cmd += " --group-add " + group
 	}
 
 	// Labels
@@ -420,7 +454,6 @@ func (e *Executor) RegistryLogin(client ssh.Connection, registry, username, pass
 
 	e.logger.Debug().
 		Str("registry", registry).
-		Str("username", username).
 		Msg("Logging into registry")
 
 	_, stderr, err := client.Execute(cmd)
@@ -428,7 +461,7 @@ func (e *Executor) RegistryLogin(client ssh.Connection, registry, username, pass
 		return fmt.Errorf("failed to login to registry %s: %w (stderr: %s)", registry, err, stderr)
 	}
 
-	e.logger.Info().Str("registry", registry).Str("username", username).Msg("Registry login successful")
+	e.logger.Info().Str("registry", registry).Msg("Registry login successful")
 
 	return nil
 }
@@ -442,9 +475,13 @@ type ContainerRunOptions struct {
 	Memory            string   // memory limit (e.g., "512m", "2g")
 	MemoryReservation string   // memory soft limit
 	CPUShares         int64    // CPU shares (relative weight)
+	CPUs              string   // hard CPU limit (e.g., "1.5" for 1.5 CPUs)
+	PIDsLimit         int64    // maximum number of PIDs (process limit)
+	Hostname          string   // container hostname
 	Network           string
 	NetworkAlias      string
 	Ports             []string
+	ExtraHosts        []string // extra host:ip mappings
 	Volumes           []VolumeMount
 	Tmpfs             map[string]string // mount point -> options
 	EnvFile           string
@@ -454,6 +491,7 @@ type ContainerRunOptions struct {
 	SecurityOpts      []string
 	CapDrop           []string
 	CapAdd            []string
+	GroupAdd          []string // additional groups for the container user
 	Labels            map[string]string
 }
 
@@ -552,10 +590,18 @@ func (e *Executor) uploadEnvVarsFile(client ssh.Connection, envVars map[string]s
 	// Generate env file content
 	var content strings.Builder
 
-	for k, v := range envVars {
+	// Sort keys for deterministic output (consistent hashing)
+	keys := make([]string, 0, len(envVars))
+	for k := range envVars {
+		keys = append(keys, k)
+	}
+
+	sort.Strings(keys)
+
+	for _, k := range keys {
 		// Docker run --env-file format: KEY=VALUE (no quotes - they become part of the value)
 		// Replace actual newlines with literal \n text (application must convert back)
-		escapedValue := strings.ReplaceAll(v, "\n", "\\n")
+		escapedValue := strings.ReplaceAll(envVars[k], "\n", "\\n")
 
 		_, _ = content.WriteString(k)
 		_, _ = content.WriteString("=")

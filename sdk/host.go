@@ -33,6 +33,8 @@ type Host struct {
 	hardenDocker   bool
 	hardenOS       bool
 	hardenSSH      bool
+	sshFingerprint string
+	sshKeyContent  string
 	plan           *Plan
 }
 
@@ -47,6 +49,8 @@ type HostBuilder struct {
 	hardenDocker   bool
 	hardenOS       bool
 	hardenSSH      bool
+	sshFingerprint string
+	sshKeyContent  string
 }
 
 // FirewallBuilder builds firewall configuration with a fluent API.
@@ -123,6 +127,43 @@ func (hb *HostBuilder) HardenOS() *HostBuilder {
 // SSH daemon is reloaded (not restarted) to preserve current connections.
 func (hb *HostBuilder) HardenSSH() *HostBuilder {
 	hb.hardenSSH = true
+
+	return hb
+}
+
+// Fingerprint sets the expected SSH host key fingerprint for verification.
+// When set, Hadron will verify the host key matches this fingerprint instead of using ~/.ssh/known_hosts.
+// This is useful for automated deployments where pre-populating known_hosts is not practical.
+//
+// Supported formats:
+// - SHA256: "SHA256:abc123..." (recommended, obtained via: ssh-keyscan -t ed25519 host | ssh-keygen -lf -)
+// - MD5: "MD5:ab:cd:ef:..." (legacy, not recommended)
+//
+// Example:
+//
+//	host := plan.Host("user@example.com").
+//	    Fingerprint("SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8").
+//	    Build()
+func (hb *HostBuilder) Fingerprint(fingerprint string) *HostBuilder {
+	hb.sshFingerprint = fingerprint
+
+	return hb
+}
+
+// SSHKey sets the SSH private key content for authentication.
+// When set, Hadron will use this key instead of SSH agent for authentication.
+// The key should be in OpenSSH format (PEM).
+//
+// Note: Only unencrypted keys are supported. For passphrase-protected keys, use SSH agent instead.
+//
+// Example:
+//
+//	keyContent := "-----BEGIN OPENSSH PRIVATE KEY-----\n...\n-----END OPENSSH PRIVATE KEY-----"
+//	host := plan.Host("user@example.com").
+//	    SSHKey(keyContent).
+//	    Build()
+func (hb *HostBuilder) SSHKey(keyContent string) *HostBuilder {
+	hb.sshKeyContent = keyContent
 
 	return hb
 }
@@ -258,6 +299,8 @@ func (hb *HostBuilder) Build() *Host {
 		hardenDocker:   hb.hardenDocker,
 		hardenOS:       hb.hardenOS,
 		hardenSSH:      hb.hardenSSH,
+		sshFingerprint: hb.sshFingerprint,
+		sshKeyContent:  hb.sshKeyContent,
 		plan:           hb.plan,
 	}
 
@@ -269,6 +312,16 @@ func (hb *HostBuilder) Build() *Host {
 // Endpoint returns the SSH endpoint (IP, hostname, or SSH config alias).
 func (h *Host) Endpoint() string {
 	return h.endpoint
+}
+
+// SSHFingerprint returns the configured SSH host key fingerprint, or empty string if not set.
+func (h *Host) SSHFingerprint() string {
+	return h.sshFingerprint
+}
+
+// SSHKeyContent returns the configured SSH private key content, or empty string if not set.
+func (h *Host) SSHKeyContent() string {
+	return h.sshKeyContent
 }
 
 // String returns a string representation of the host.

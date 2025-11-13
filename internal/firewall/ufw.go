@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/the-agent-c-ai/hadron/internal/debian"
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/hadron/internal/debian"
+	"github.com/farcloser/quark/ssh"
 )
 
 // Rule represents a single firewall rule.

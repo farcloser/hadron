@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"time"
 
-	"github.com/the-agent-c-ai/hadron/sdk"
+	"github.com/farcloser/hadron/sdk"
 )
 
 //go:embed Caddyfile
@@ -13,13 +13,15 @@ var caddyfile string
 
 // Config contains configuration for the Caddy reverse proxy.
 type Config struct {
-	Image         string
-	LogLevel      string
-	Static        string
-	Email         string
-	Domain        string
-	ReversePort   string
-	ReverseHealth string
+	Image             string
+	LogLevel          string
+	Static            string
+	Email             string
+	Domain            string
+	ReversePort       string
+	ReverseHealth     string
+	ReverseHealthPort string
+	MountPoint        string
 }
 
 // Proxy deploys a Caddy reverse proxy container with automatic HTTPS.
@@ -36,10 +38,17 @@ func Proxy(plan *sdk.Plan, depends *sdk.Container, network *sdk.Network, host *s
 		Host(host).
 		Build()
 
+	mountPoint := cnf.MountPoint
+	if mountPoint == "" {
+		mountPoint = "/*"
+	}
+
 	plan.Container("caddy").
 		Host(host).
 		Image(cnf.Image).
 		Network(network).
+		Label("prometheus.scrape", "true").
+		Label("prometheus.port", "2019").
 		Volume(caddyData, "/data").                                 // Writable: TLS certificates
 		Volume(caddyConfig, "/config").                             // Writable: runtime config
 		MountData([]byte(caddyfile), "/etc/caddy/Caddyfile", "ro"). // Config (read-only)
@@ -48,19 +57,22 @@ func Proxy(plan *sdk.Plan, depends *sdk.Container, network *sdk.Network, host *s
 		Env("DOMAIN", cnf.Domain).
 		Env("EMAIL", cnf.Email).
 		Env("REVERSE", depends.NetworkAlias()).
-		Env("REVERSE_PORT", "3002").
-		Env("REVERSE_HEALTH", "/ping").
+		Env("REVERSE_PORT", cnf.ReversePort).
+		Env("REVERSE_HEALTH", cnf.ReverseHealth).
+		Env("REVERSE_HEALTH_PORT", cnf.ReverseHealthPort).
+		Env("MOUNTPOINT", mountPoint).
 		Restart("unless-stopped").
 		ReadOnly().
 		CapDrop("ALL").
-		CapAdd("NET_BIND_SERVICE"). // Required to bind to ports 80/443
+		CapAdd("NET_BIND_SERVICE"). // Required to bind to port 443
 		SecurityOpt("no-new-privileges").
 		DependsOn(depends). // Wait for SCIM to be healthy
-		Port("80:80").      // HTTP (redirects to HTTPS)
 		Port("443:443").    // HTTPS
 		Memory("256m").
 		MemoryReservation("128m").
 		CPUShares(512).
+		CPUs("0.5").
+		PIDsLimit(50).
 		HealthCheck(sdk.TCPCheck(443).
 			WithTimeout(30 * time.Second).
 			WithInterval(30 * time.Second).

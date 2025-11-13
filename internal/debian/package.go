@@ -4,7 +4,7 @@ package debian
 import (
 	"fmt"
 
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/quark/ssh"
 )
 
 // customInstaller is a function that performs custom package installation.
@@ -14,7 +14,8 @@ type customInstaller func(client ssh.Connection) error
 func getCustomInstaller(packageName string) (customInstaller, bool) {
 	// Map of package names to custom installation functions
 	customInstallers := map[string]customInstaller{
-		"docker-ce": installDocker,
+		"docker-ce":                installDocker,
+		"prometheus-node-exporter": installNodeExporter,
 	}
 
 	installer, exists := customInstallers[packageName]

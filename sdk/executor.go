@@ -2,15 +2,16 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
-	"github.com/the-agent-c-ai/hadron/internal/debian"
-	"github.com/the-agent-c-ai/hadron/internal/docker"
-	"github.com/the-agent-c-ai/hadron/internal/firewall"
-	"github.com/the-agent-c-ai/hadron/internal/sshd"
-	"github.com/the-agent-c-ai/hadron/internal/sysctl"
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/hadron/internal/debian"
+	"github.com/farcloser/hadron/internal/docker"
+	"github.com/farcloser/hadron/internal/firewall"
+	"github.com/farcloser/hadron/internal/sshd"
+	"github.com/farcloser/hadron/internal/sysctl"
+	"github.com/farcloser/quark/ssh"
 )
 
 const (
@@ -19,6 +20,8 @@ const (
 	errFailedSSHClient = "failed to get SSH client for %s: %w"
 	dockerReadyTimeout = 30 * time.Second
 )
+
+var errConnectToNetwork = errors.New("failed to connect container to network")
 
 // deployableResource represents a resource that can be deployed (Network, Volume).
 type deployableResource interface {
@@ -56,6 +59,13 @@ func newExecutor(plan *Plan) *executor {
 		sshPool:    sshPool,
 		dockerExec: dockerExec,
 	}
+}
+
+// getSSHClient returns an SSH client for the given host, using SSH key and/or fingerprint verification if configured.
+//
+//nolint:wrapcheck
+func (e *executor) getSSHClient(host *Host) (ssh.Connection, error) {
+	return e.sshPool.GetClientWithKey(host.Endpoint(), host.SSHFingerprint(), host.SSHKeyContent())
 }
 
 // execute performs the actual deployment.
@@ -142,7 +152,7 @@ func (e *executor) deployNetworks() error {
 // deployResource is a generic function to deploy a resource (network or volume).
 // This eliminates code duplication between deployNetwork and deployVolume.
 func (e *executor) deployResource(resource deployableResource, ops resourceOperations) error {
-	client, err := e.sshPool.GetClient(resource.Host().Endpoint())
+	client, err := e.getSSHClient(resource.Host())
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, resource.Host(), err)
 	}
@@ -240,7 +250,7 @@ func (e *executor) deployContainers() error {
 
 // deployContainer deploys a single container.
 func (e *executor) deployContainer(container *Container) error {
-	client, err := e.sshPool.GetClient(container.host.Endpoint())
+	client, err := e.getSSHClient(container.host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, container.host, err)
 	}
@@ -362,6 +372,15 @@ func (e *executor) deployContainer(container *Container) error {
 			Msg("Data mount uploaded successfully")
 	}
 
+	// Prepare labels (merge user labels with system labels)
+	labels := make(map[string]string)
+	for k, v := range container.labels {
+		labels[k] = v
+	}
+
+	labels[labelConfigSHA] = container.ConfigHash()
+	labels[labelPlan] = e.plan.name
+
 	// Prepare run options
 	opts := docker.ContainerRunOptions{
 		Name:              container.name,
@@ -371,9 +390,13 @@ func (e *executor) deployContainer(container *Container) error {
 		Memory:            container.memory,
 		MemoryReservation: container.memoryReservation,
 		CPUShares:         container.cpuShares,
+		CPUs:              container.cpus,
+		PIDsLimit:         container.pidsLimit,
+		Hostname:          container.hostname,
 		Network:           "",
 		NetworkAlias:      container.networkAlias,
 		Ports:             container.ports,
+		ExtraHosts:        container.extraHosts,
 		Volumes:           volumes,
 		Tmpfs:             container.tmpfs,
 		EnvFile:           container.envFile,
@@ -383,19 +406,34 @@ func (e *executor) deployContainer(container *Container) error {
 		SecurityOpts:      container.securityOpts,
 		CapDrop:           container.capDrop,
 		CapAdd:            container.capAdd,
-		Labels: map[string]string{
-			labelConfigSHA: container.ConfigHash(),
-			labelPlan:      e.plan.name,
-		},
+		GroupAdd:          container.groupAdd,
+		Labels:            labels,
 	}
 
-	if container.network != nil {
-		opts.Network = container.network.Name()
+	// Set primary network (first network in list, or empty if none)
+	if len(container.networks) > 0 {
+		opts.Network = container.networks[0].Name()
 	}
 
 	// Run container
 	if err := e.dockerExec.RunContainer(client, opts); err != nil {
 		return fmt.Errorf("failed to run container: %w", err)
+	}
+
+	// Connect to additional networks (if more than one network specified)
+	for i := 1; i < len(container.networks); i++ {
+		networkName := container.networks[i].Name()
+		connectCmd := fmt.Sprintf("docker network connect %s %s", networkName, container.name)
+
+		e.plan.logger.Info().
+			Str("container", container.name).
+			Str("network", networkName).
+			Msg("Connecting container to additional network")
+
+		_, stderr, err := client.Execute(connectCmd)
+		if err != nil {
+			return fmt.Errorf("%w %s: %s", errConnectToNetwork, networkName, stderr)
+		}
 	}
 
 	// TODO: Perform health check if configured
@@ -423,7 +461,7 @@ func (e *executor) deployHostPackages(host *Host) error {
 	}
 
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}
@@ -485,7 +523,7 @@ func (e *executor) deployHostDockerDaemon(host *Host) error {
 	}
 
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}
@@ -589,7 +627,7 @@ func (e *executor) deployAutoUpdates() error {
 // This is always enabled for all hosts - no opt-out.
 func (e *executor) deployHostAutoUpdates(host *Host) error {
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}
@@ -635,7 +673,7 @@ func (e *executor) deployHostFirewall(host *Host) error {
 	config := host.firewallConfig
 
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}
@@ -823,7 +861,7 @@ func (e *executor) loginHostRegistries(host *Host) error {
 	}
 
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}
@@ -869,7 +907,7 @@ func (e *executor) deployHostOSHardening(host *Host) error {
 	}
 
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}
@@ -910,7 +948,7 @@ func (e *executor) deployHostSSHHardening(host *Host) error {
 	}
 
 	// Get SSH client for this host
-	client, err := e.sshPool.GetClient(host.Endpoint())
+	client, err := e.getSSHClient(host)
 	if err != nil {
 		return fmt.Errorf(errFailedSSHClient, host, err)
 	}

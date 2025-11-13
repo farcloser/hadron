@@ -5,7 +5,7 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/the-agent-c-ai/hadron/sdk"
+	"github.com/farcloser/hadron/sdk"
 )
 
 func TestNewPlan(t *testing.T) {
@@ -50,5 +50,40 @@ func TestPlanHostBuilder(t *testing.T) {
 	// Verify string representation works
 	if host.String() == "" {
 		t.Error("expected non-empty string representation")
+	}
+}
+
+func TestPlanHostWithFingerprint(t *testing.T) {
+	t.Parallel()
+
+	plan := sdk.NewPlan("test").WithLogger(zerolog.Nop())
+
+	expectedFingerprint := "SHA256:nThbg6kXUpJWGl7E1IGOCspRomTxdCARLviKw6E5SY8"
+	host := plan.Host("test-host").
+		Fingerprint(expectedFingerprint).
+		Build()
+
+	// Black box test: verify fingerprint is stored and retrievable
+	if host.SSHFingerprint() != expectedFingerprint {
+		t.Errorf("expected fingerprint '%s', got '%s'", expectedFingerprint, host.SSHFingerprint())
+	}
+
+	// Verify fingerprint doesn't affect other host properties
+	if host.Endpoint() != "test-host" {
+		t.Errorf("expected endpoint 'test-host', got '%s'", host.Endpoint())
+	}
+}
+
+func TestPlanHostWithoutFingerprint(t *testing.T) {
+	t.Parallel()
+
+	plan := sdk.NewPlan("test").WithLogger(zerolog.Nop())
+
+	host := plan.Host("test-host").
+		Build()
+
+	// Black box test: verify empty fingerprint when not set
+	if host.SSHFingerprint() != "" {
+		t.Errorf("expected empty fingerprint, got '%s'", host.SSHFingerprint())
 	}
 }

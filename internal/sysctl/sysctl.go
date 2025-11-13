@@ -4,7 +4,7 @@ package sysctl
 import (
 	"fmt"
 
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/quark/ssh"
 )
 
 const sysctlConfigPath = "/etc/sysctl.d/99-hadron-security.conf"

@@ -4,7 +4,7 @@ package sshd
 import (
 	"fmt"
 
-	"github.com/the-agent-c-ai/hadron/sdk/ssh"
+	"github.com/farcloser/quark/ssh"
 )
 
 const sshdConfigPath = "/etc/ssh/sshd_config"

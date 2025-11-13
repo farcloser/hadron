@@ -9,7 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/the-agent-c-ai/hadron/sdk"
+	"github.com/farcloser/hadron/sdk"
 )
 
 const (
@@ -19,8 +19,9 @@ const (
 )
 
 func main() {
+	ctx := context.Background()
 	// Configure logging
-	sdk.ConfigureDefaultLogger()
+	sdk.ConfigureDefaultLogger(ctx)
 
 	// Load environment variables
 	_ = sdk.LoadEnv("../.env")
@@ -30,7 +31,12 @@ func main() {
 		WithLogger(log.Logger)
 
 	// Define the host (SSH config resolves connection parameters)
-	blackHost := plan.Host(sdk.GetEnv("BLACK_HOST")).
+	blackHostname, err := sdk.GetEnv("BLACK_HOST")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get BLACK_HOST")
+	}
+
+	blackHost := plan.Host(blackHostname).
 		Build()
 
 	// Create custom Docker network
@@ -60,12 +66,26 @@ func main() {
 		Host(blackHost).
 		Build()
 
+	// Get environment variables
+	githubOrg, err := sdk.GetEnv("GITHUB_ORG")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get GITHUB_ORG")
+	}
+
+	vectorDigest, err := sdk.GetEnv("VECTOR_GHCR_DIGEST")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get VECTOR_GHCR_DIGEST")
+	}
+
+	caddyDigest, err := sdk.GetEnv("CADDY_GHCR_DIGEST")
+	if err != nil {
+		log.Fatal().Err(err).Msg("Failed to get CADDY_GHCR_DIGEST")
+	}
+
 	// Vector Aggregator (main service)
 	vectorAgg := plan.Container("vector-aggregator").
 		Host(blackHost).
-		Image(fmt.Sprintf("ghcr.io/%s/vector@%s",
-			sdk.GetEnv("GITHUB_ORG"),
-			sdk.GetEnv("VECTOR_GHCR_DIGEST"))).
+		Image(fmt.Sprintf("ghcr.io/%s/vector@%s", githubOrg, vectorDigest)).
 		Network(blackNet).
 		NetworkAlias("vector-aggregator").
 		Volume(vectorData, "/var/lib/vector").
@@ -84,9 +104,7 @@ func main() {
 	// Vector Agent (collects Docker logs)
 	plan.Container("vector-agent").
 		Host(blackHost).
-		Image(fmt.Sprintf("ghcr.io/%s/vector@%s",
-			sdk.GetEnv("GITHUB_ORG"),
-			sdk.GetEnv("VECTOR_GHCR_DIGEST"))).
+		Image(fmt.Sprintf("ghcr.io/%s/vector@%s", githubOrg, vectorDigest)).
 		Network(blackNet).
 		DependsOn(vectorAgg).
 		Volume("/var/run/docker.sock", "/var/run/docker.sock", "ro").
@@ -103,9 +121,7 @@ func main() {
 	// Caddy reverse proxy
 	plan.Container("caddy").
 		Host(blackHost).
-		Image(fmt.Sprintf("ghcr.io/%s/caddy@%s",
-			sdk.GetEnv("GITHUB_ORG"),
-			sdk.GetEnv("CADDY_GHCR_DIGEST"))).
+		Image(fmt.Sprintf("ghcr.io/%s/caddy@%s", githubOrg, caddyDigest)).
 		Network(blackNet).
 		Port("80:80").
 		Port("443:443").
@@ -120,25 +136,17 @@ func main() {
 		SecurityOpt("no-new-privileges").
 		Build()
 
-	// Execute plan based on environment
-	ctx := context.Background()
-
-	var err error
-
 	switch {
 	case os.Getenv("HADRON_DESTROY") == "true":
-		err = plan.Destroy()
-		if err != nil {
+		if err := plan.Destroy(); err != nil {
 			log.Fatal().Err(err).Msg("Failed to destroy resources")
 		}
 	case os.Getenv("HADRON_DRY_RUN") == "true":
-		err = plan.DryRun()
-		if err != nil {
+		if err := plan.DryRun(); err != nil {
 			log.Fatal().Err(err).Msg("Dry run failed")
 		}
 	default:
-		err = plan.Execute(ctx)
-		if err != nil {
+		if err := plan.Execute(ctx); err != nil {
 			log.Fatal().Err(err).Msg("Deployment failed")
 		}
 	}

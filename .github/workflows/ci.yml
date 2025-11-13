@@ -1,0 +1,100 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+        with:
+          fetch-depth: 0  # Full history for git-validation
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+        with:
+          go-version: '1.25.3'
+          cache: true
+
+      - name: Install dependencies
+        run: |
+          make install-dev-tools
+          sudo apt-get update -qq && sudo apt-get install -qq shellcheck yamllint
+
+      - name: Lint Go (all platforms)
+        run: make lint-go-all
+
+      - name: Lint commits
+        if: github.event_name == 'pull_request'
+        env:
+          LINT_COMMIT_RANGE: origin/${{ github.base_ref }}..HEAD
+        run: make lint-commits
+
+      - name: Lint go.mod
+        run: make lint-mod
+
+      - name: Lint licenses (all platforms)
+        run: make lint-licenses-all
+
+      - name: Lint headers
+        run: make lint-headers
+
+      - name: Lint YAML
+        run: make lint-yaml
+
+      - name: Lint shell scripts
+        run: make lint-shell
+
+  test:
+    name: Test
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+        with:
+          go-version: '1.25.3'
+          cache: true
+
+      - name: Start SSH agent
+        run: |
+          eval "$(ssh-agent -s)"
+          echo "SSH_AUTH_SOCK=$SSH_AUTH_SOCK" >> $GITHUB_ENV
+          echo "SSH_AGENT_PID=$SSH_AGENT_PID" >> $GITHUB_ENV
+
+      - name: Run unit tests
+        run: make test-unit
+
+      - name: Run race detector tests
+        run: make test-unit-race
+
+  build:
+    name: Build
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683  # v4.2.2
+
+      - name: Set up Go
+        uses: actions/setup-go@3041bf56c941b39c61721a86cd11f3bb1338122a  # v5.2.0
+        with:
+          go-version: '1.25.3'
+          cache: true
+
+      - name: Build binary
+        run: make build
+
+      - name: Verify binary
+        run: ./bin/hadron --help
